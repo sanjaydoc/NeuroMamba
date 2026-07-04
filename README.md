@@ -104,6 +104,17 @@ python scripts/generate.py --markov --data data/pdz.jsonl --n 64
 Everything **degrades gracefully**: no network → synthetic data; no checkpoint or
 no PyTorch → torch-free Markov baseline; no GPU → CPU. The pipeline always runs.
 
+> **Windows / GPU setup — see [`RUN.md`](RUN.md) for the full verified walkthrough.**
+> Two gotchas worth knowing up front:
+> 1. **Use Python 3.10** for the venv (`py -3.10 -m venv .venv`) — PyTorch has no
+>    CUDA wheels for 3.13/3.14, so `pip install torch` will report "no matching
+>    distribution".
+> 2. **Call pip as `python -m pip ...`**, not bare `pip ...` — some corporate
+>    Device Guard / WDAC policies block the generated `pip.exe` shim, but running
+>    it through `python.exe` is allowed.
+> Install CUDA PyTorch for the RTX 3000 with:
+> `python -m pip install torch --index-url https://download.pytorch.org/whl/cu121`
+
 ## Project layout
 
 ```
