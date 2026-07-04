@@ -44,7 +44,7 @@ closed-loop discovery platform.
 
 | | Typical baseline | **NeuroMamba** |
 |---|---|---|
-| Sequence model | Transformer (O(L²) attention) | **From-scratch selective SSM (Mamba/S6), O(L) scan** |
+| Sequence model | Transformer (O(L²) attention) | **From-scratch selective SSM (Mamba/S6), work-efficient parallel scan** |
 | Selectivity | Fixed mixing | **Input-dependent Δ, B, C** — content-based memory (the S6 idea) |
 | Dependencies | `mamba-ssm` CUDA kernel | **Pure PyTorch** — trains on CPU or a 6 GB GPU |
 | Training | One long run | **Step-based resumable checkpointing** ("train in batches") |
@@ -76,7 +76,11 @@ Each **Mamba block** runs a strictly-causal depthwise conv, then a **selective
 state-space scan** whose step-size `Δ` and input/output matrices `B, C` are
 *functions of the current residue* — so the model chooses, position by position,
 what to remember. The recurrence only looks backward, which is exactly what makes
-left-to-right generation and next-token training valid. See
+left-to-right generation and next-token training valid. Because that recurrence
+is associative, it is computed as a **work-efficient parallel prefix scan**
+(Hillis-Steele, `⌈log₂ L⌉` vectorised passes) instead of a per-timestep Python
+loop — the GPU stays busy without a fused CUDA kernel, and a reference sequential
+scan is asserted numerically identical in the tests. See
 [`src/neuromamba/mamba.py`](src/neuromamba/mamba.py) for the annotated
 implementation.
 

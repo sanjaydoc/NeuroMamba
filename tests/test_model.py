@@ -47,6 +47,28 @@ def test_causality():
     assert not torch.allclose(base[:, -1], after[:, -1], atol=1e-5)
 
 
+def test_parallel_scan_matches_sequential():
+    """The vectorised parallel scan must equal the reference sequential scan.
+
+    This is the correctness guard for the speed optimisation: same forward
+    output and same gradients, to floating-point tolerance.
+    """
+    from neuromamba.mamba import MambaBlock
+
+    torch.manual_seed(0)
+    blk = MambaBlock(d_model=48, d_state=16).double().eval()
+    x1 = torch.randn(3, 40, blk.d_inner, dtype=torch.float64, requires_grad=True)
+    x2 = x1.clone().detach().requires_grad_(True)
+
+    par = blk._selective_scan(x1)
+    seq = blk._selective_scan_sequential(x2)
+    assert torch.allclose(par, seq, atol=1e-9)
+
+    par.sum().backward()
+    seq.sum().backward()
+    assert torch.allclose(x1.grad, x2.grad, atol=1e-9)
+
+
 def test_weight_tying_and_param_count():
     model = _small_model()
     assert model.lm_head.weight is model.embedding.weight

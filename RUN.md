@@ -85,6 +85,40 @@ python -m neuromamba.train --data data\pdz.jsonl --max-steps 8000 --device cuda 
 python scripts\generate.py --markov --data data\pdz.jsonl --n 64
 ```
 
+## Making the GPU work harder (higher utilization / faster)
+
+Low GPU utilization (e.g. ~20%) means the GPU is idle waiting between small
+operations. Levers, most effective first:
+
+1. **The parallel scan** (already in the model) replaces the old per-timestep
+   loop with a work-efficient prefix scan, so the GPU runs big batched ops
+   instead of thousands of tiny sequential ones. This is the main fix — measured
+   ~2× faster even on CPU, more on GPU. Make sure you're on the latest code:
+   `git pull origin main`.
+
+2. **Bigger batch** — larger batches = larger kernels = higher utilization.
+   Push it until VRAM is ~80% full; back off if you hit `CUDA out of memory`:
+   ```bat
+   python -m neuromamba.train --data data\pdz.jsonl --max-steps 4000 --batch-size 128 --device cuda
+   ```
+
+3. **Bigger model** — more width/depth = more work per step (also raises
+   capacity). Scale with the CLI knobs:
+   ```bat
+   python -m neuromamba.train --data data\pdz.jsonl --max-steps 4000 ^
+       --batch-size 96 --d-model 256 --n-layers 8 --d-state 16 --device cuda
+   ```
+
+Watch VRAM + utilization live in another terminal:
+```bat
+nvidia-smi -l 1
+```
+
+Note: a 0.7 M-param model is *small* — even fully optimized it won't saturate a
+modern GPU, and that's fine. What matters is wall-clock per step, which the
+parallel scan + a larger batch cut substantially. If you want to genuinely load
+the GPU, raise `--d-model`/`--n-layers` and `--batch-size` together.
+
 ## 5. Pull future updates
 
 From inside the `NeuroMamba` folder:

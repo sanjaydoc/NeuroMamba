@@ -173,11 +173,21 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--no-amp", action="store_true", help="Disable mixed precision.")
     p.add_argument("--resume", action="store_true", help="Resume from the last checkpoint.")
+    # Model-size knobs — scale these up to put more work on the GPU per step.
+    p.add_argument("--d-model", type=int, default=None, help="Residual width (default 128).")
+    p.add_argument("--n-layers", type=int, default=None, help="Number of Mamba blocks (default 6).")
+    p.add_argument("--d-state", type=int, default=None, help="SSM state size N (default 16).")
     return p.parse_args()
 
 
 def main() -> int:
     args = parse_args()
+    overrides = {
+        "d_model": args.d_model,
+        "n_layers": args.n_layers,
+        "d_state": args.d_state,
+    }
+    model_cfg = {k: v for k, v in overrides.items() if v is not None} or None
     train(
         data=args.data,
         synthetic=args.synthetic,
@@ -191,6 +201,7 @@ def main() -> int:
         seed=args.seed,
         mixed_precision=not args.no_amp,
         resume=args.resume,
+        model_cfg=model_cfg,
     )
     return 0
 

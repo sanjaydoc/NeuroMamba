@@ -1,10 +1,11 @@
 """A from-scratch selective state-space (Mamba / S6) protein language model.
 
 Implemented from first principles — no ``mamba-ssm`` CUDA-kernel dependency — so
-it trains on a 6 GB laptop GPU or plain CPU. The scan is an explicit sequential
-recurrence: O(L) in the short protein-length regime (~100 residues), slower than
-the official hardware-aware parallel scan but numerically identical and
-dependency-free.
+it trains on a 6 GB laptop GPU or plain CPU. The state recurrence is run as a
+**work-efficient parallel prefix scan** (Hillis-Steele) in ``⌈log₂ L⌉``
+vectorised passes rather than an ``L``-step Python loop, so the GPU is actually
+utilised — no fused CUDA kernel required. A reference sequential scan is kept for
+clarity and is asserted numerically identical in the tests.
 
 What makes it *selective* (the S6 contribution over classic S4): the SSM
 parameters ``Δ`` (step size), ``B`` (input matrix) and ``C`` (output matrix) are
@@ -112,16 +113,12 @@ class MambaBlock(nn.Module):
         y = y * F.silu(z)
         return self.out_proj(y)
 
-    def _selective_scan(self, x: torch.Tensor) -> torch.Tensor:
-        """Sequential zero-order-hold selective scan.
+    def _discretize(self, x: torch.Tensor):
+        """Return the per-step selective SSM tensors ``(deltaA, deltaB_x, C)``.
 
-        Args:
-            x: ``(B, L, d_inner)`` post-conv input.
-
-        Returns:
-            ``(B, L, d_inner)`` SSM output.
+        Shapes: ``deltaA``/``deltaB_x`` are ``(B, L, d_inner, N)``; ``C`` is
+        ``(B, L, N)``.
         """
-        b, seq_len, d_inner = x.shape
         n = self.d_state
         A = -torch.exp(self.A_log)  # (d_inner, N), negative => stable
 
@@ -132,15 +129,50 @@ class MambaBlock(nn.Module):
         # Discretize: Ā = exp(Δ ⊙ A); B̄ x ≈ Δ ⊙ B ⊙ x  (ZOH, simplified B̄).
         deltaA = torch.exp(delta.unsqueeze(-1) * A)  # (B, L, d_inner, N)
         deltaB_x = delta.unsqueeze(-1) * B_mat.unsqueeze(2) * x.unsqueeze(-1)
+        return deltaA, deltaB_x, C_mat
 
-        h = x.new_zeros(b, d_inner, n)
+    def _selective_scan(self, x: torch.Tensor) -> torch.Tensor:
+        """Work-efficient **parallel** selective scan (Hillis-Steele prefix scan).
+
+        The state recurrence ``h_t = Ā_t · h_{t-1} + B̄_t·x_t`` is a first-order
+        linear recurrence, which is *associative*: composing two steps
+        ``(a₁,b₁)`` then ``(a₂,b₂)`` gives ``(a₂a₁, a₂b₁+b₂)``. So the whole scan
+        can be done as an inclusive parallel prefix-scan over that operator in
+        ``⌈log₂ L⌉`` vectorised passes instead of ``L`` sequential Python steps —
+        no per-timestep loop, no ``mamba-ssm`` CUDA kernel, and the GPU is
+        actually utilised. It is numerically identical to the sequential scan
+        (see :meth:`_selective_scan_sequential`) and stable: the multiplicative
+        factors ``Ā ∈ (0, 1]`` only ever shrink, so nothing overflows.
+        """
+        deltaA, deltaB_x, C_mat = self._discretize(x)
+        seq_len = x.shape[1]
+
+        a = deltaA          # (B, L, d_inner, N) multiplicative coefficients
+        b = deltaB_x        # (B, L, d_inner, N) additive terms
+        d = 1
+        while d < seq_len:
+            # identity element for the first d positions: a=1, b=0 (no-op).
+            a_prev = F.pad(a[:, : seq_len - d], (0, 0, 0, 0, d, 0), value=1.0)
+            b_prev = F.pad(b[:, : seq_len - d], (0, 0, 0, 0, d, 0), value=0.0)
+            b = a * b_prev + b
+            a = a * a_prev
+            d *= 2
+
+        h = b  # after the scan, b[:, t] == h_t
+        y = torch.einsum("bldn,bln->bld", h, C_mat)  # (B, L, d_inner)
+        return y + x * self.D  # skip connection
+
+    def _selective_scan_sequential(self, x: torch.Tensor) -> torch.Tensor:
+        """Reference O(L) sequential scan — kept for clarity and equivalence tests."""
+        b, seq_len, d_inner = x.shape
+        deltaA, deltaB_x, C_mat = self._discretize(x)
+        h = x.new_zeros(b, d_inner, self.d_state)
         ys = []
         for t in range(seq_len):
-            h = deltaA[:, t] * h + deltaB_x[:, t]  # (B, d_inner, N)
-            y_t = torch.einsum("bdn,bn->bd", h, C_mat[:, t])
-            ys.append(y_t)
-        y = torch.stack(ys, dim=1)  # (B, L, d_inner)
-        return y + x * self.D  # skip connection
+            h = deltaA[:, t] * h + deltaB_x[:, t]
+            ys.append(torch.einsum("bdn,bn->bd", h, C_mat[:, t]))
+        y = torch.stack(ys, dim=1)
+        return y + x * self.D
 
 
 class ResidualMambaLayer(nn.Module):
