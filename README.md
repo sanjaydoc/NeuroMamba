@@ -93,10 +93,11 @@ pip install -e ".[torch]"
 # 2. Get real PDZ-domain sequences (UniProt); falls back to synthetic offline
 python scripts/download_pdz_family.py --out data/pdz.jsonl
 
-# 3. Train on your GPU — small model, fits 6 GB VRAM, resumable
-python -m neuromamba.train --data data/pdz.jsonl --max-steps 4000 --batch-size 128 --device cuda
+# 3. Train on your GPU — fits 6 GB VRAM (parallel scan + gradient checkpointing), resumable
+python -m neuromamba.train --data data/pdz.jsonl --max-steps 4000 --batch-size 64 --device cuda
 #    ...stop any time, then continue where you left off:
 python -m neuromamba.train --data data/pdz.jsonl --max-steps 8000 --device cuda --resume
+#    (hit CUDA OOM? lower --batch-size to 32/16)
 
 # 4. Generate + score novel sequences (writes designs.jsonl + metrics.json)
 python scripts/generate.py --ckpt outputs/neuromamba/model.pt --n 64

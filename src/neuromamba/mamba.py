@@ -33,6 +33,7 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torch.utils.checkpoint
 
 
 class RMSNorm(nn.Module):
@@ -204,11 +205,17 @@ class ProteinMamba(nn.Module):
         d_conv: int = 4,
         expand: int = 2,
         pad_id: int = 0,
+        grad_checkpoint: bool = True,
     ) -> None:
         super().__init__()
         self.vocab_size = vocab_size
         self.d_model = d_model
         self.pad_id = pad_id
+        # Recompute each block in the backward pass instead of storing all of the
+        # parallel scan's intermediate passes. The parallel scan is fast but
+        # activation-heavy (it keeps ~log2(L) copies of the state); checkpointing
+        # bounds peak VRAM to a single block so larger batches fit a 6 GB GPU.
+        self.grad_checkpoint = grad_checkpoint
 
         self.embedding = nn.Embedding(vocab_size, d_model, padding_idx=pad_id)
         self.layers = nn.ModuleList(
@@ -237,8 +244,12 @@ class ProteinMamba(nn.Module):
     def forward(self, tokens: torch.Tensor) -> torch.Tensor:
         """Args: ``tokens`` ``(B, L)`` ids. Returns logits ``(B, L, vocab)``."""
         x = self.embedding(tokens)
+        use_ckpt = self.grad_checkpoint and self.training and torch.is_grad_enabled()
         for layer in self.layers:
-            x = layer(x)
+            if use_ckpt:
+                x = torch.utils.checkpoint.checkpoint(layer, x, use_reentrant=False)
+            else:
+                x = layer(x)
         x = self.norm_f(x)
         return self.lm_head(x)
 
@@ -264,4 +275,5 @@ def build_mamba(cfg: dict, vocab_size: int, pad_id: int = 0) -> ProteinMamba:
         d_conv=int(cfg.get("d_conv", 4)),
         expand=int(cfg.get("expand", 2)),
         pad_id=pad_id,
+        grad_checkpoint=bool(cfg.get("grad_checkpoint", True)),
     )

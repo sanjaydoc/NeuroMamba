@@ -63,12 +63,21 @@ Expect `...+cu121 CUDA: True` and all tests passing.
 :: real PDZ-domain sequences (UniProt); synthetic fallback if offline
 python scripts\download_pdz_family.py --out data\pdz.jsonl
 
-:: train on the GPU (small model, fits 6 GB VRAM)
-python -m neuromamba.train --data data\pdz.jsonl --max-steps 4000 --batch-size 128 --device cuda
+:: train on the GPU. --batch-size 64 fits 6 GB comfortably with the parallel
+:: scan + gradient checkpointing (on by default). Raise it until VRAM is ~80%;
+:: lower it if you hit "CUDA out of memory".
+python -m neuromamba.train --data data\pdz.jsonl --max-steps 4000 --batch-size 64 --device cuda
 
 :: generate + score novel sequences
 python scripts\generate.py --ckpt outputs\neuromamba\model.pt --n 64
 ```
+
+> **VRAM note.** The parallel scan is fast but activation-heavy (it holds
+> ~log2(L) copies of the state). Gradient checkpointing is **on by default**,
+> which recomputes each block in the backward pass and bounds peak VRAM to a
+> single block — that's what lets batch 64 fit 6 GB. If you still hit OOM, lower
+> `--batch-size` (32, 16) and/or set, before the command:
+> `set PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True`
 
 ### Train in batches (resume any time)
 
@@ -97,9 +106,10 @@ operations. Levers, most effective first:
    `git pull origin main`.
 
 2. **Bigger batch** — larger batches = larger kernels = higher utilization.
-   Push it until VRAM is ~80% full; back off if you hit `CUDA out of memory`:
+   Push it until VRAM is ~80% full; back off if you hit `CUDA out of memory`
+   (gradient checkpointing is on by default, so batch 64 fits 6 GB):
    ```bat
-   python -m neuromamba.train --data data\pdz.jsonl --max-steps 4000 --batch-size 128 --device cuda
+   python -m neuromamba.train --data data\pdz.jsonl --max-steps 4000 --batch-size 64 --device cuda
    ```
 
 3. **Bigger model** — more width/depth = more work per step (also raises
