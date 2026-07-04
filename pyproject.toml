@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "neuromamba"
+version = "0.1.0"
+description = "A from-scratch selective state-space (Mamba/S6) protein language model for de novo generation of novel PDZ-domain sequences"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Dr. Sanjay Anbu" }]
+keywords = [
+    "state-space-models",
+    "mamba",
+    "protein-language-model",
+    "de-novo-design",
+    "generative-model",
+    "computational-biology",
+]
+
+# The core library (tokenizer, data, metrics, proxy oracle, Markov fallback) is
+# pure-Python and dependency-free. PyTorch is only needed to train/sample the
+# Mamba model itself; install the [torch] extra for that.
+dependencies = []
+
+[project.optional-dependencies]
+torch = ["torch>=2.0"]
+dev = ["pytest>=7", "ruff>=0.1", "torch>=2.0"]
+
+[project.urls]
+Homepage = "https://github.com/sanjaydoc/NeuroMamba"
+Repository = "https://github.com/sanjaydoc/NeuroMamba"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP", "B"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+filterwarnings = ["ignore::DeprecationWarning"]

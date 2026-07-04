@@ -1,0 +1,70 @@
+===============================================================================
+ NeuroMamba — command reference
+ A from-scratch selective state-space (Mamba/S6) protein language model.
+===============================================================================
+
+-------------------------------------------------------------------------------
+ 0. SETUP (one time)
+-------------------------------------------------------------------------------
+# Create + activate a virtual environment (Windows / cmd)
+python -m venv .venv
+.venv\Scripts\activate.bat
+
+# Install. Core is dependency-free; the [torch] extra adds PyTorch for
+# training/sampling the Mamba model.
+pip install -e ".[torch]"
+
+# GPU users (RTX 3000 etc.): install a CUDA build of torch that matches your
+# driver, e.g. (check pytorch.org for the exact command):
+#   pip install torch --index-url https://download.pytorch.org/whl/cu121
+
+-------------------------------------------------------------------------------
+ 1. DATA  (real PDZ-domain sequences; synthetic fallback offline)
+-------------------------------------------------------------------------------
+python scripts\download_pdz_family.py --out data\pdz.jsonl
+python scripts\download_pdz_family.py --count 800 --out data\pdz.jsonl
+python scripts\download_pdz_family.py --synthetic          # force offline
+
+-------------------------------------------------------------------------------
+ 2. TRAIN  (RTX 3000, 6 GB VRAM — small model, fp16, resumable)
+-------------------------------------------------------------------------------
+# Full run on the GPU
+python -m neuromamba.train --data data\pdz.jsonl --max-steps 4000 --batch-size 128 --device cuda
+
+# TRAIN IN BATCHES: stop any time (Ctrl-C), then continue from the last
+# checkpoint — global step, weights, and optimizer state are all restored.
+python -m neuromamba.train --data data\pdz.jsonl --max-steps 8000 --device cuda --resume
+
+# CPU smoke test (no GPU needed)
+python -m neuromamba.train --synthetic --max-steps 200 --device cpu
+
+# Useful knobs:
+#   --batch-size   larger uses more VRAM (128 is comfortable at 6 GB)
+#   --save-every   checkpoint frequency (default 200 steps)
+#   --lr           learning rate (default 3e-4)
+#   --no-amp       disable mixed precision
+
+-------------------------------------------------------------------------------
+ 3. GENERATE + SCORE  (novel sequences + metrics)
+-------------------------------------------------------------------------------
+python scripts\generate.py --ckpt outputs\neuromamba\model.pt --n 64 --top-p 0.9
+#   -> outputs\generated\designs.jsonl  (sequences + proxy scores)
+#   -> outputs\generated\metrics.json   (validity/novelty/diversity + means)
+
+# Sampling controls: --temperature, --top-p (nucleus), --top-k
+
+# Torch-free baseline (no GPU, no checkpoint needed):
+python scripts\generate.py --markov --data data\pdz.jsonl --n 64
+
+-------------------------------------------------------------------------------
+ 4. TEST + LINT
+-------------------------------------------------------------------------------
+pytest -q                       # full suite (torch tests skip if no torch)
+ruff check src tests scripts    # lint
+
+===============================================================================
+ NOTES
+ - Everything degrades gracefully: no network -> synthetic data; no torch or no
+   checkpoint -> Markov baseline; no GPU -> CPU.
+ - The oracle scorers are in-silico PROXIES, not validated assays.
+===============================================================================

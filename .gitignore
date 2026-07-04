@@ -1,0 +1,54 @@
+# Byte-compiled / optimized / caches
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Packaging / build
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Test / lint / type caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Experiment outputs & artifacts
+outputs/
+checkpoints/
+*.pt
+*.ckpt
+mlruns/
+wandb/
+
+# Data (fetched or generated; keep the repo light)
+data/
+*.jsonl
+*.fasta
+*.pdb
+!tests/**/*.jsonl
+
+# Logs
+*.log
+
+# Notebooks
+.ipynb_checkpoints/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
