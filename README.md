@@ -86,39 +86,50 @@ implementation.
 
 ## Quickstart
 
+**Setup — macOS / Linux:**
 ```bash
-# 1. Install (core is dependency-free; add the torch extra to train/sample)
-pip install -e ".[torch]"
+# Python 3.10–3.12 recommended (PyTorch has no CUDA wheels for 3.13/3.14 yet)
+python3 -m venv .venv
+source .venv/bin/activate
 
-# 2. Get real PDZ-domain sequences (UniProt); falls back to synthetic offline
+pip install --upgrade pip
+pip install -e ".[torch]"          # CPU/Mac; for a CUDA box use the cu121 wheel:
+# pip install torch --index-url https://download.pytorch.org/whl/cu121
+```
+
+**Setup — Windows** (see [`RUN.md`](RUN.md) for the full verified walkthrough):
+```bat
+py -3.10 -m venv .venv
+.venv\Scripts\activate.bat
+python -m pip install --upgrade pip
+python -m pip install torch --index-url https://download.pytorch.org/whl/cu121
+python -m pip install -e ".[dev]"
+```
+> Two Windows gotchas: **use Python 3.10** (no CUDA torch wheels for 3.13/3.14),
+> and call pip as **`python -m pip ...`** (Device Guard can block the `pip.exe` shim).
+
+**Run** (paths use `/`; on Windows swap to `\`):
+```bash
+# 1. Get real PDZ-domain sequences (UniProt); falls back to synthetic offline
 python scripts/download_pdz_family.py --out data/pdz.jsonl
 
-# 3. Train on your GPU — fits 6 GB VRAM (parallel scan + gradient checkpointing), resumable
+# 2. Train — parallel scan + gradient checkpointing fit 6 GB; a held-out
+#    validation split + early stopping stop at the generalization sweet spot
+#    (so it won't memorize), and the best-by-val model is saved to model.pt.
 python -m neuromamba.train --data data/pdz.jsonl --max-steps 4000 --batch-size 64 --device cuda
-#    ...stop any time, then continue where you left off:
+#    ...stop any time, then continue (resumes from last.pt):
 python -m neuromamba.train --data data/pdz.jsonl --max-steps 8000 --device cuda --resume
-#    (hit CUDA OOM? lower --batch-size to 32/16)
+#    (hit CUDA OOM? lower --batch-size to 32/16 · macOS Apple-Silicon: --device mps)
 
-# 4. Generate + score novel sequences (writes designs.jsonl + metrics.json)
+# 3. Generate + score novel sequences (writes designs.jsonl + metrics.json)
 python scripts/generate.py --ckpt outputs/neuromamba/model.pt --n 64
 
-# 5. No GPU / no torch? The whole pipeline still runs on the Markov baseline:
+# 4. No GPU / no torch? The whole pipeline still runs on the Markov baseline:
 python scripts/generate.py --markov --data data/pdz.jsonl --n 64
 ```
 
 Everything **degrades gracefully**: no network → synthetic data; no checkpoint or
 no PyTorch → torch-free Markov baseline; no GPU → CPU. The pipeline always runs.
-
-> **Windows / GPU setup — see [`RUN.md`](RUN.md) for the full verified walkthrough.**
-> Two gotchas worth knowing up front:
-> 1. **Use Python 3.10** for the venv (`py -3.10 -m venv .venv`) — PyTorch has no
->    CUDA wheels for 3.13/3.14, so `pip install torch` will report "no matching
->    distribution".
-> 2. **Call pip as `python -m pip ...`**, not bare `pip ...` — some corporate
->    Device Guard / WDAC policies block the generated `pip.exe` shim, but running
->    it through `python.exe` is allowed.
-> Install CUDA PyTorch for the RTX 3000 with:
-> `python -m pip install torch --index-url https://download.pytorch.org/whl/cu121`
 
 ## Project layout
 

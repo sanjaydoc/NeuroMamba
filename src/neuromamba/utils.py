@@ -43,7 +43,11 @@ def set_seed(seed: int = 42) -> None:
 
 
 def resolve_device(device: str = "auto") -> str:
-    """Resolve "auto"/"cuda"/"cpu" to an available device string."""
+    """Resolve "auto"/"cuda"/"mps"/"cpu" to an available device string.
+
+    "auto" prefers CUDA, then Apple-Silicon MPS, then CPU. An explicit request
+    that isn't available falls back to CPU rather than erroring.
+    """
     if device == "cpu":
         return "cpu"
     try:
@@ -51,6 +55,9 @@ def resolve_device(device: str = "auto") -> str:
 
         if device in ("auto", "cuda") and torch.cuda.is_available():
             return "cuda"
+        mps = getattr(torch.backends, "mps", None)
+        if device in ("auto", "mps") and mps is not None and mps.is_available():
+            return "mps"
     except ImportError:
         pass
     return "cpu"

@@ -108,25 +108,46 @@ def test_sampling_produces_valid_sequences():
 
 
 def test_train_and_resume(tmp_path):
-    """End-to-end: train a few steps, then resume and confirm the step advances."""
+    """End-to-end: train a few steps, then resume and confirm the step advances.
+
+    Also checks the best/last checkpoint split and that validation ran.
+    """
     from neuromamba.train import train
 
     out = tmp_path / "run"
     cfg = {"d_model": 32, "n_layers": 2, "d_state": 8}
-    ckpt = train(
-        synthetic=True, out_dir=out, max_steps=10, batch_size=8,
-        save_every=5, log_every=100, device="cpu", model_cfg=cfg, seed=0,
+    best = train(
+        synthetic=True, out_dir=out, max_steps=10, batch_size=8, eval_every=5,
+        log_every=100, device="cpu", model_cfg=cfg, seed=0,
     )
-    assert ckpt.exists()
-    state = torch.load(ckpt, map_location="cpu")
-    assert state["global_step"] == 10
+    # best-by-val model is loadable and carries provenance
+    assert best.exists() and best.name == "model.pt"
+    state = torch.load(best, map_location="cpu")
     assert "train_sequences" in state and state["train_sequences"]
+    assert "best_val" in state
+    # latest state lives in last.pt and tracks the true global step
+    last = out / "last.pt"
+    assert last.exists()
+    assert torch.load(last, map_location="cpu")["global_step"] == 10
 
-    # Resume for 10 more steps -> global step should reach 20.
+    # Resume for 10 more steps -> latest global step should reach 20.
     train(
-        synthetic=True, out_dir=out, max_steps=20, batch_size=8,
-        save_every=5, log_every=100, device="cpu", model_cfg=cfg, seed=0,
-        resume=True,
+        synthetic=True, out_dir=out, max_steps=20, batch_size=8, eval_every=5,
+        log_every=100, device="cpu", model_cfg=cfg, seed=0, resume=True,
     )
-    state2 = torch.load(ckpt, map_location="cpu")
-    assert state2["global_step"] == 20
+    assert torch.load(last, map_location="cpu")["global_step"] == 20
+
+
+def test_early_stopping_triggers(tmp_path):
+    """Early stopping halts before max_steps once val loss stops improving."""
+    from neuromamba.train import train
+
+    out = tmp_path / "run_es"
+    cfg = {"d_model": 32, "n_layers": 2, "d_state": 8}
+    train(
+        synthetic=True, out_dir=out, max_steps=100000, batch_size=8, eval_every=2,
+        patience=2, log_every=100000, device="cpu", model_cfg=cfg, seed=0,
+    )
+    # It must have stopped far short of the (huge) max_steps.
+    last = torch.load(out / "last.pt", map_location="cpu")
+    assert last["global_step"] < 100000
