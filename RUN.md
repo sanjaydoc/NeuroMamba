@@ -232,6 +232,16 @@ modern GPU, and that's fine. What matters is wall-clock per step, which the
 parallel scan + a larger batch cut substantially. If you want to genuinely load
 the GPU, raise `--d-model`/`--n-layers` and `--batch-size` together.
 
+## Plot the training curve
+
+After a run, render the train-vs-validation loss curve (marks the early-stop
+point) from `history.json`:
+
+```bat
+python -m pip install matplotlib          :: one-time (or install the [viz] extra)
+python scripts\plot_training.py --history outputs\neuromamba\history.json --out docs\training_curve.png
+```
+
 ## 5. Pull future updates
 
 From inside the `NeuroMamba` folder:

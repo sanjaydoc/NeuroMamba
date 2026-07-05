@@ -146,7 +146,7 @@ neuromamba/
 │   ├── oracle.py       # self-contained in-silico proxy scorers
 │   ├── markov.py       # torch-free order-k baseline generator
 │   └── utils.py        # logging · seeding · device
-├── scripts/            # download_pdz_family · train · generate
+├── scripts/            # download_pdz_family · train · generate · plot_training
 ├── tests/              # torch-free core + PyTorch model/resume tests
 ├── docs/REPORT.md      # technical report
 └── .github/workflows/  # CI (ruff + pytest on 3.10 / 3.11)
@@ -181,6 +181,12 @@ its proxy scores are lower. The SSM learns the family's grammar, so its novel
 samples stay protein-like: it sits in the sweet spot (novel **and** functional).
 
 **Early stopping matters — the ablation:**
+
+![Train vs. validation loss with the early-stop point](docs/training_curve.png)
+
+The curve above is the tell: train loss keeps falling while **validation loss
+bottoms at step 300 and then rises** — the model is starting to memorise. Early
+stopping saves the step-300 model (green star) instead of the overfit one.
 
 | NeuroMamba checkpoint | novel_fraction | id-to-train | validity | PDZ-groove |
 |---|---|---|---|---|

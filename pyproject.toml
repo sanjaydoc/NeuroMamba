@@ -26,7 +26,8 @@ dependencies = []
 
 [project.optional-dependencies]
 torch = ["torch>=2.0"]
-dev = ["pytest>=7", "ruff>=0.1", "torch>=2.0"]
+viz = ["matplotlib>=3.5"]
+dev = ["pytest>=7", "ruff>=0.1", "torch>=2.0", "matplotlib>=3.5"]
 
 [project.urls]
 Homepage = "https://github.com/sanjaydoc/NeuroMamba"
