@@ -45,6 +45,7 @@ closed-loop discovery platform.
 | | Typical baseline | **NeuroMamba** |
 |---|---|---|
 | Sequence model | Transformer (O(L²) attention) | **From-scratch selective SSM (Mamba/S6), work-efficient parallel scan** |
+| Inference | O(L²) / KV-cache grows with L | **O(1) per token, constant-memory recurrent decode** |
 | Selectivity | Fixed mixing | **Input-dependent Δ, B, C** — content-based memory (the S6 idea) |
 | Dependencies | `mamba-ssm` CUDA kernel | **Pure PyTorch** — trains on CPU or a 6 GB GPU |
 | Training | One long run | **Step-based resumable checkpointing** ("train in batches") |

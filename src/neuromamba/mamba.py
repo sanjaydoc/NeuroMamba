@@ -114,6 +114,55 @@ class MambaBlock(nn.Module):
         y = y * F.silu(z)
         return self.out_proj(y)
 
+    def init_cache(self, batch: int, device, dtype):
+        """Allocate the incremental-decode cache: ``(conv_window, ssm_state)``.
+
+        ``conv_window`` is the last ``d_conv`` conv inputs ``(B, d_inner, d_conv)``;
+        ``ssm_state`` is the recurrent state ``(B, d_inner, N)``. Both start at zero.
+        """
+        conv = torch.zeros(batch, self.d_inner, self.d_conv, device=device, dtype=dtype)
+        ssm = torch.zeros(batch, self.d_inner, self.d_state, device=device, dtype=dtype)
+        return [conv, ssm]
+
+    def step(self, u_t: torch.Tensor, cache):
+        """Advance the block by **one** token — O(1) in sequence length.
+
+        This is the incremental form of :meth:`forward` used for fast generation:
+        instead of re-scanning the whole prefix each step, it carries the conv
+        window and the SSM recurrent state in ``cache``. It is numerically
+        identical to running :meth:`forward` over the full prefix (asserted in the
+        tests) — the property that makes an SSM's O(1)-per-token inference exact.
+
+        Args:
+            u_t: ``(B, d_model)`` input for the current token.
+            cache: ``[conv_window, ssm_state]`` from :meth:`init_cache` (mutated).
+
+        Returns:
+            ``(B, d_model)`` output for the current token.
+        """
+        conv_window, ssm_state = cache
+        x_t, z_t = self.in_proj(u_t).chunk(2, dim=-1)  # (B, d_inner) each
+
+        # roll the causal conv window and apply the depthwise conv at this step
+        conv_window = torch.cat([conv_window[:, :, 1:], x_t.unsqueeze(-1)], dim=-1)
+        w = self.conv1d.weight.squeeze(1)  # (d_inner, d_conv)
+        x_t = (conv_window * w).sum(-1) + self.conv1d.bias
+        x_t = F.silu(x_t)
+
+        # one selective-SSM recurrence step
+        A = -torch.exp(self.A_log)  # (d_inner, N)
+        proj = self.x_proj(x_t)
+        dt, B_mat, C_mat = torch.split(proj, [self.dt_rank, self.d_state, self.d_state], dim=-1)
+        delta = F.softplus(self.dt_proj(dt))  # (B, d_inner)
+        deltaA = torch.exp(delta.unsqueeze(-1) * A)  # (B, d_inner, N)
+        deltaB_x = delta.unsqueeze(-1) * B_mat.unsqueeze(1) * x_t.unsqueeze(-1)
+        ssm_state = deltaA * ssm_state + deltaB_x
+        y_t = torch.einsum("bdn,bn->bd", ssm_state, C_mat) + x_t * self.D
+        y_t = y_t * F.silu(z_t)
+
+        cache[0], cache[1] = conv_window, ssm_state
+        return self.out_proj(y_t)
+
     def _discretize(self, x: torch.Tensor):
         """Return the per-step selective SSM tensors ``(deltaA, deltaB_x, C)``.
 
@@ -187,6 +236,10 @@ class ResidualMambaLayer(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return x + self.mixer(self.norm(x))
 
+    def step(self, x_t: torch.Tensor, cache):
+        """One-token incremental form of :meth:`forward`."""
+        return x_t + self.mixer.step(self.norm(x_t), cache)
+
 
 class ProteinMamba(nn.Module):
     """Autoregressive protein language model built from selective-SSM blocks.
@@ -250,6 +303,29 @@ class ProteinMamba(nn.Module):
                 x = torch.utils.checkpoint.checkpoint(layer, x, use_reentrant=False)
             else:
                 x = layer(x)
+        x = self.norm_f(x)
+        return self.lm_head(x)
+
+    def init_cache(self, batch: int, device=None, dtype=None):
+        """Allocate a per-layer incremental-decode cache for fast generation."""
+        param = next(self.parameters())
+        device = device or param.device
+        dtype = dtype or param.dtype
+        return [layer.mixer.init_cache(batch, device, dtype) for layer in self.layers]
+
+    def step(self, token_t: torch.Tensor, caches):
+        """Advance the whole model by one token. O(1) in sequence length.
+
+        Args:
+            token_t: ``(B,)`` token ids for the current position.
+            caches: list of per-layer caches from :meth:`init_cache` (mutated).
+
+        Returns:
+            ``(B, vocab)`` next-token logits.
+        """
+        x = self.embedding(token_t)  # (B, d_model)
+        for layer, cache in zip(self.layers, caches, strict=True):
+            x = layer.step(x, cache)
         x = self.norm_f(x)
         return self.lm_head(x)
 

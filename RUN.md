@@ -165,6 +165,12 @@ python scripts\generate.py --markov --data data\pdz.jsonl --n 64 --markov-order 
 Outputs land in `outputs\generated\`: `designs.jsonl` (sequences + proxy scores)
 and `metrics.json` (validity / novelty / diversity + means).
 
+> **Fast generation.** Sampling uses an **O(1)-per-token recurrent decode** (it
+> carries the SSM state + conv window instead of re-scanning the whole prefix each
+> token). That's ~**200× faster** than the naive re-scan and is exact — so
+> generating a library takes ~a second, not ~a minute. The only remaining pause is
+> the one-time `import torch` + CUDA init at startup.
+
 ## Checkpoints: `model.pt` vs `last.pt`
 
 Training writes two files in `outputs\neuromamba\`:

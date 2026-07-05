@@ -50,7 +50,14 @@ def sample(
     device=None,
     seed: int | None = None,
 ) -> list[str]:
-    """Generate ``n_samples`` novel sequences. Returns decoded amino-acid strings."""
+    """Generate ``n_samples`` novel sequences with **O(1)-per-token** decoding.
+
+    Uses the model's incremental ``step`` (carrying the recurrent SSM state and
+    the causal-conv window) instead of re-running the whole prefix each token —
+    O(L) total rather than O(L²). This is the property that makes SSM inference
+    cheap, and it is what makes generation near-instant. Returns decoded
+    amino-acid strings.
+    """
     import torch
 
     model.eval()
@@ -59,25 +66,29 @@ def sample(
     if seed is not None:
         torch.manual_seed(seed)
 
-    tokens = torch.full((n_samples, 1), tokenizer.bos_id, dtype=torch.long, device=device)
+    caches = model.init_cache(n_samples, device=device, dtype=param.dtype)
+    cur = torch.full((n_samples,), tokenizer.bos_id, dtype=torch.long, device=device)
+    cols = [cur]
     finished = torch.zeros(n_samples, dtype=torch.bool, device=device)
 
     with torch.no_grad():
         for _ in range(max_len):
-            logits = model(tokens)[:, -1, :]  # (B, vocab)
+            logits = model.step(cur, caches)  # (B, vocab)
             logits[:, tokenizer.pad_id] = float("-inf")  # never emit <pad>
             logits[:, tokenizer.bos_id] = float("-inf")  # never re-emit <bos>
             logits = logits / max(temperature, 1e-6)
             logits = _filter_logits(logits, top_k=top_k, top_p=top_p)
             probs = torch.softmax(logits, dim=-1)
-            nxt = torch.multinomial(probs, num_samples=1)  # (B, 1)
-            nxt[finished] = tokenizer.pad_id  # once done, pad so decode stops
-            tokens = torch.cat([tokens, nxt], dim=1)
-            finished = finished | (nxt.squeeze(1) == tokenizer.eos_id)
+            nxt = torch.multinomial(probs, num_samples=1).squeeze(1)  # (B,)
+            nxt = torch.where(finished, torch.full_like(nxt, tokenizer.pad_id), nxt)
+            cols.append(nxt)
+            finished = finished | (nxt == tokenizer.eos_id)
+            cur = nxt
             if bool(finished.all()):
                 break
 
-    return [tokenizer.decode(row.tolist()) for row in tokens]
+    rows = torch.stack(cols, dim=1)  # (B, T) incl. leading <bos>
+    return [tokenizer.decode(row.tolist()) for row in rows]
 
 
 def sample_from_checkpoint(

@@ -96,6 +96,30 @@ def test_loss_decreases_on_overfit():
     assert float(loss.item()) < first
 
 
+def test_cached_step_matches_full_forward():
+    """O(1) incremental decode must equal the full parallel-scan forward.
+
+    Feeding a prefix token-by-token through ``model.step`` (carrying the SSM
+    state + conv window) must reproduce, at every position, the logits from a
+    single full forward over the whole prefix — the guarantee that fast
+    generation is exact, not an approximation.
+    """
+    torch.manual_seed(0)
+    tok = ProteinTokenizer()
+    model = build_mamba(
+        {"d_model": 32, "n_layers": 3, "d_state": 8, "d_conv": 4},
+        tok.vocab_size, tok.pad_id,
+    ).double().eval()
+
+    tokens = torch.randint(3, 23, (2, 15))
+    with torch.no_grad():
+        full = model(tokens)  # (B, L, V)
+        caches = model.init_cache(2, dtype=torch.float64)
+        for t in range(tokens.shape[1]):
+            step_logits = model.step(tokens[:, t], caches)  # (B, V)
+            assert torch.allclose(step_logits, full[:, t], atol=1e-8)
+
+
 def test_sampling_produces_valid_sequences():
     from neuromamba.generate import sample
 
