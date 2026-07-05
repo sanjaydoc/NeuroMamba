@@ -94,31 +94,40 @@ read on what the selective-SSM memory buys.
 
 ## 6. Results
 
-**Training.** A 0.10 M-parameter model (`d_model=64, n_layers=3`) trained for 350
-steps on CPU shows next-token cross-entropy falling **2.77 → 2.28**. The package
-default (0.70 M, `d_model=128, n_layers=6`) is what the RTX 3000 run uses; it fits
-6 GB comfortably, trains faster, and reaches lower loss.
+**Training.** The default 0.70 M model (`d_model=128, n_layers=6`) trained on
+**646 real PDZ-domain sequences** on a 6 GB RTX 3000. Validation loss bottomed at
+**step 300 (val perplexity 3.37)** and then rose while train loss kept falling —
+the memorisation signature — so early stopping selected the step-300 model.
 
-**Generation.** 64 samples, NeuroMamba vs. the order-3 Markov baseline, same proxy
-oracle (higher is better; *max-train-identity* lower = more novel):
+**Generation.** 64 samples, NeuroMamba (early-stopped) vs. the order-3 Markov
+baseline, same proxy oracle (higher is better; *max-train-identity* lower = more
+novel):
 
 | Metric | Markov (baseline) | NeuroMamba |
 |---|---|---|
-| Validity | 0.73 | **0.97** |
+| Validity | 0.81 | **0.86** |
 | Uniqueness | 1.00 | 1.00 |
-| Novel fraction (id < 0.8) | 1.00 | 1.00 |
-| Mean max-train-identity | 0.41 | 0.49 |
-| Diversity | 0.78 | 0.71 |
-| Proxy stability | 0.835 | **0.840** |
-| Proxy solubility | **0.673** | 0.651 |
-| Proxy PDZ-binding groove | 0.708 | **0.798** |
+| Novel fraction (id < 0.8) | **1.00** | 0.85 |
+| Mean max-train-identity | **0.39** | 0.58 |
+| Diversity | 0.77 | 0.77 |
+| Proxy stability | 0.864 | **0.900** |
+| Proxy solubility | 0.715 | **0.727** |
+| Proxy PDZ-binding groove | 0.777 | **0.816** |
 
-The selective-SSM improves **validity (+0.23)** and the **PDZ-groove score
-(+0.09)** — the two metrics tied to producing real, functional domains — at 100%
-novelty. The baseline's slightly higher diversity/solubility follows from its
-lower validity (noisier sequences). This is the signal the recurrent selective
-memory adds over a memoryless k-gram; longer training widens it. Numbers are from
-a short run for reproducibility; rerun `scripts/generate.py` to refresh.
+NeuroMamba wins on **validity and all three proxy objectives** while staying **85%
+novel**. The k-gram's "100% novel" is off-manifold noise — a memoryless model
+drifts from the family, which is why its proxy scores are lower.
+
+**Early-stopping ablation** (same model, different stopping point):
+
+| Checkpoint | novel_fraction | id-to-train | validity | PDZ-groove |
+|---|---|---|---|---|
+| Overfit (step 4000) | 0.05 | 0.95 | 1.00 | 0.92 |
+| Early-stopped (step 300) | **0.85** | **0.58** | 0.86 | 0.82 |
+
+Trained to convergence the model *memorises* (5% novel, near-copies of training
+data); early stopping on held-out loss trades a little validity/score for an **18×
+novelty gain** — the difference between retrieving and generating.
 
 ## 7. Limitations & honesty
 

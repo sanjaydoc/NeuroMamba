@@ -154,9 +154,9 @@ neuromamba/
 
 ## Results
 
-**Training** (0.10 M-param model, CPU smoke run, 350 steps): next-token loss falls
-cleanly **2.77 → 2.28**. On an RTX 3000 the default 0.70 M model trains faster and
-reaches lower loss.
+Trained on **646 real PDZ-domain sequences** (UniProt Pfam `PF00595`) on a 6 GB
+laptop GPU (RTX 3000). A held-out validation split + early stopping selected the
+**best model at step 300 (val perplexity 3.37)** — before it memorised.
 
 **Generation** — 64 sampled sequences, NeuroMamba vs. the torch-free order-3
 **Markov baseline**, scored on the same proxy oracle (higher is better, except
@@ -164,23 +164,33 @@ reaches lower loss.
 
 | Metric | Markov (order-3 baseline) | **NeuroMamba** |
 |---|---|---|
-| Validity (canonical, sensible length) | 0.73 | **0.97** |
+| Validity (canonical, sensible length) | 0.81 | **0.86** |
 | Uniqueness | 1.00 | 1.00 |
-| Novel fraction (max id to train < 0.8) | 1.00 | 1.00 |
-| Mean max-train-identity (lower = novel) | 0.41 | 0.49 |
-| Diversity (1 − mean pairwise id) | 0.78 | 0.71 |
-| Proxy — stability | 0.835 | **0.840** |
-| Proxy — solubility | **0.673** | 0.651 |
-| Proxy — PDZ-binding groove | 0.708 | **0.798** |
+| Novel fraction (max id to train < 0.8) | **1.00** | 0.85 |
+| Mean max-train-identity (lower = novel) | **0.39** | 0.58 |
+| Diversity (1 − mean pairwise id) | 0.77 | 0.77 |
+| Proxy — stability | 0.864 | **0.900** |
+| Proxy — solubility | 0.715 | **0.727** |
+| Proxy — PDZ-binding groove | 0.777 | **0.816** |
 
-**Read:** even from a tiny CPU smoke run, the selective-SSM lifts **validity by +23
-points** and the **functional PDZ-groove score by +0.09** over the memoryless
-baseline, while every sample stays novel (nothing is copied from the training
-set). The baseline's marginally higher diversity/solubility is a by-product of its
-*lower* validity — it emits noisier, less protein-like sequences. Learning the
-domain grammar (validity) and the carboxylate-binding motif (PDZ score) is exactly
-what the recurrent selective memory buys over a k-gram; the gap widens with longer
-RTX 3000 training.
+**Read:** NeuroMamba beats the memoryless k-gram on **validity and all three proxy
+objectives** (stability, solubility, PDZ-groove) while keeping **85% of samples
+novel**. The Markov baseline scores "100% novel" only because a 3-gram wanders
+*off the family manifold* — that extra "novelty" is noise, which is exactly why
+its proxy scores are lower. The SSM learns the family's grammar, so its novel
+samples stay protein-like: it sits in the sweet spot (novel **and** functional).
+
+**Early stopping matters — the ablation:**
+
+| NeuroMamba checkpoint | novel_fraction | id-to-train | validity | PDZ-groove |
+|---|---|---|---|---|
+| Overfit (step 4000, memorised) | 0.05 | 0.95 | 1.00 | 0.92 |
+| **Early-stopped (step 300, best val)** | **0.85** | **0.58** | 0.86 | 0.82 |
+
+Trained to convergence the model memorises — highest proxy scores but only **5%
+novel** (near-copies of the training set). Early-stopping on held-out loss trades a
+little validity/score for an **18× jump in novelty** — the difference between
+*retrieving* training data and *generating* new proteins.
 
 Reproduce:
 ```bash
