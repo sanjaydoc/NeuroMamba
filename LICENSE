@@ -1,21 +1,34 @@
-MIT License
+NeuroMamba — Proprietary Software License
+Copyright (c) 2026 Dr. Sanjay Anbu. All Rights Reserved.
 
-Copyright (c) 2026 Dr. Sanjay Anbu
+This software, together with its source code, model architectures, trained
+weights, datasets, configurations, and documentation (collectively, the
+"Software"), is the confidential and proprietary property of Dr. Sanjay Anbu
+("the Owner"). The Software is NOT open source.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+NO LICENSE OR RIGHT IS GRANTED, by implication, estoppel, or otherwise, except
+under a separate written agreement signed by the Owner. Where access to the
+Software has been provided, it is provided for reference only. Except with the
+Owner's prior written permission, no person or entity may:
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+  1. use, run, execute, or deploy the Software for any purpose;
+  2. copy, reproduce, host, or store the Software, in whole or in part;
+  3. modify, adapt, translate, or create derivative works of the Software;
+  4. distribute, publish, sublicense, sell, rent, lease, lend, or otherwise
+     transfer the Software or any rights in it;
+  5. train, fine-tune, or derive any model or dataset from the Software; or
+  6. remove, obscure, or alter any proprietary or copyright notices.
+
+All rights not expressly granted in a signed written agreement are reserved by
+the Owner. Any unauthorized use, reproduction, or distribution of the Software,
+or any part of it, is strictly prohibited and may violate applicable copyright,
+trade-secret, and other laws.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+OWNER BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN
+ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION
+WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+For licensing enquiries, contact: support@medicalandroid.com

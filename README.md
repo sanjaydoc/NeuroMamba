@@ -10,7 +10,7 @@
 
 ![CI](https://github.com/sanjaydoc/NeuroMamba/actions/workflows/ci.yml/badge.svg)
 ![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11-blue)
-![License](https://img.shields.io/badge/license-MIT-green)
+![License](https://img.shields.io/badge/license-Proprietary-red)
 ![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000)
 
 [Architecture](#architecture) · [Quickstart](#quickstart) · [Results](#results) · [How it fits the de-novo-design brief](#how-it-fits-the-de-novo-design-brief)
@@ -231,6 +231,8 @@ python scripts/generate.py --markov --data data/pdz.jsonl --n 64        # baseli
 
 ## License & data notes
 
-- Code: **MIT** (see [`LICENSE`](LICENSE)).
+- Code: **Proprietary — All Rights Reserved** (see [`LICENSE`](LICENSE)). Not open
+  source; no use, copying, modification, training, or distribution without the
+  Owner's prior written permission.
 - Sequence data: fetched from **UniProt** (freely available); the synthetic
   fallback is generated locally and clearly labelled.
